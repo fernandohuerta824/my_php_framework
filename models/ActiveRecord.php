@@ -136,8 +136,14 @@ abstract class ActiveRecord {
     public static function where(string $columna, string $valor): ActiveRecord|null {
         $valorQuery = self::$db->real_escape_string($valor);
         $query = "SELECT * FROM " . static::$tabla . " WHERE $columna = '$valorQuery' LIMIT 1";
-
-        return self::consultar($query)[0];
+        return self::consultar($query)[0] ?? null;
+    }
+    
+    public static function belongsTo(string $columna, string $valor): array {
+        $valorQuery = self::$db->real_escape_string($valor);
+        $query = "SELECT * FROM " . static::$tabla . " WHERE $columna = '$valorQuery' ";
+        
+        return self::consultar($query);
     }
 
     public function borrar(): mysqli|bool {
