@@ -33,7 +33,7 @@ class Router {
             return call_user_func($fn, $this);
 
         http_response_code(404);     
-        $this->render('404', ['titulo' => '404']);  
+        $this->render('404', ['titulo' => 'Error 404: Pagina no encontrada']);  
     }
 
     public function render(string $view, array $args = []) {
@@ -42,7 +42,13 @@ class Router {
 
         ob_start();
         include __DIR__ . "/views/$view.php";
+        
         $contenido = ob_get_clean();
-        include __DIR__ . "/views/layout.php";
+        $url = strtok($_SERVER['REQUEST_URI'], '?') ?? '/';
+
+        if(str_contains($url, '/admin')) 
+            include __DIR__ . "/views/admin-layout.php";
+        else 
+            include __DIR__ . "/views/layout.php";
     }
 }

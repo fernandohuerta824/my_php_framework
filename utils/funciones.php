@@ -19,3 +19,7 @@ function debug($variable) {
 function s($html): string {
     return htmlspecialchars($html);
 }
+
+function paginaActual(string $url): bool {
+    return str_contains($_SERVER['PATH_INFO'], $url);
+}

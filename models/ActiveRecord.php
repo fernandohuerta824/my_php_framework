@@ -4,6 +4,7 @@ namespace Model;
 
 use Model\Imagen as Imagen;
 use mysqli;
+use Model\PonenteImagen;
 
 abstract class ActiveRecord {
     protected static mysqli $db;
@@ -12,23 +13,24 @@ abstract class ActiveRecord {
 
     protected static array $columnas = [];
 
-    protected static array $errores = [];
+    protected static array $alertas = [];
 
     public int $id;
-    public Imagen $imagen;
+    public Imagen|null $imagen;
  
     public static function setDB(mysqli $db) {
         self::$db = $db;
     }
     
     public function guardar() {
-        if(!empty(static::$errores)) 
+        if(!empty(static::$alertas)) 
             return false;
         $atributos = $this->sanitizarAtributos();
-
+        
         $columnas = join(', ', array_keys($atributos));
 
         $valores = join("', '", array_values($atributos));
+        
         
         if($this->id) {
             $registro = self::encontrarPorID($this->id);
@@ -51,16 +53,18 @@ abstract class ActiveRecord {
     private function sanitizarAtributos(): array {
         $atributos = $this->atributos();
         foreach($atributos as $key => $value) {
-            // if($key === 'imagen') {
-                //     $atributos[$key] = $value->getNombreFinal();
-                //     continue;
-                // }
+            if($key === 'imagen') {
+                $atributos[$key] = $value->getNombreFinal();
+                continue;
+            }
                 
             if($key === 'id') 
                 continue;
             
             if(gettype($value) === 'string')
                 $atributos[$key] = self::$db->real_escape_string($value);
+            if(gettype($value) === 'NULL')
+                $atributos[$key] = NULL;
         }
         
        
@@ -93,19 +97,14 @@ abstract class ActiveRecord {
         while ($registro = $resultado->fetch_assoc()) {
             $columnas = $registro;
     
-            
-            $instancia = new static($columnas);
-    
-            
             if (isset($registro['imagen'])) {
-                $imagenValores = [
-                    'name' => $registro['imagen'],
-                    'size' => 1,
-                    'tmp_name' => $instancia->imagen->getRutaParaGuardar() . $registro['imagen']
-                ];
-                $instancia->imagen = $imagenValores; 
+                $clase = static::class . 'Imagen';
+                
+                $columnas['imagen'] = new $clase(['name' => $registro['imagen']], false);
+ 
             }
-    
+            $instancia = new static($columnas);
+            
             $array[] = $instancia;
         }
 
@@ -113,13 +112,12 @@ abstract class ActiveRecord {
         return $array;
     }
 
-    public static function getErrores(): array {
-        return static::$errores;
+    public static function getAlertas(): array {
+        return static::$alertas;
     }   
 
-    public static function todos(): array {
-        $query = "SELECT * FROM " . static::$tabla;
-
+    public static function todos(string $orden = 'ASC'): array {
+        $query = "SELECT * FROM " . static::$tabla . " ORDER BY id $orden";
         return self::consultar($query);
     }
 
@@ -133,10 +131,39 @@ abstract class ActiveRecord {
         return self::consultar($consulta);
     }
 
+    public static function totalDeRegistros(string $columna = '', string $valor = ''): int {
+        $query = 'SELECT count(*) as totalRegistros FROM ' . static::$tabla;
+        if($columna)
+            $query .= " WHERE $columna = $valor"; 
+        $resultado = self::$db->query($query);
+        $numero = (int)$resultado->fetch_assoc()['totalRegistros'];
+        return $numero;
+    }
+
+    public static function paginar(int $porPagina, int $offset) : array {
+        $query = "SELECT * FROM " . static::$tabla . " LIMIT $porPagina offset $offset";
+        return self::consultar($query);
+    }
+
     public static function where(string $columna, string $valor): ActiveRecord|null {
         $valorQuery = self::$db->real_escape_string($valor);
         $query = "SELECT * FROM " . static::$tabla . " WHERE $columna = '$valorQuery' LIMIT 1";
         return self::consultar($query)[0] ?? null;
+    }
+
+    public static function whereArray(array $array = []): array {
+        $query = "SELECT * FROM " . static::$tabla . " WHERE ";
+        foreach($array as $key => $value) {
+            $query .= "$key = '$value' AND ";
+        }
+        $query = substr($query, 0, -5);
+
+        return self::consultar($query);
+    }
+
+    public static function ordenar(string $columna, string $orden = 'ASC') {
+        $query = "SELECT * FROM " . static::$tabla . " ORDER BY $columna $orden";
+        return self::consultar($query);
     }
     
     public static function belongsTo(string $columna, string $valor): array {
@@ -181,7 +208,7 @@ abstract class ActiveRecord {
                     $this->$key = [];
                     break;
                 case 'object':
-                    $this->$key = null;
+                    $this->$key = new Imagen([]);
                     break; // Opcional: o puedes devolver una nueva instancia.
                 case 'boolean':
                     $this->$key = false;
